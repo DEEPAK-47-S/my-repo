@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS — Rock Paper Scissors</title>
+<style>
+/* ===== RESET & ROOT ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --neon-blue: #00d4ff;
+  --neon-purple: #b040ff;
+  --neon-pink: #ff0080;
+  --neon-gold: #ffd700;
+  --neon-green: #00ff88;
+  --dark-bg: #020408;
+  --dark-panel: rgba(5, 15, 30, 0.85);
+  --glass: rgba(0, 212, 255, 0.06);
+  --glass-border: rgba(0, 212, 255, 0.2);
+  --text-primary: #e8f4ff;
+  --text-muted: rgba(180, 220, 255, 0.55);
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--dark-bg);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  cursor: none;
+}
+
+/* ===== CUSTOM CURSOR ===== */
+#cursor-outer {
+  position: fixed; top: 0; left: 0;
+  width: 32px; height: 32px;
+  border: 1.5px solid var(--neon-blue);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 99999;
+  transition: width 0.2s, height 0.2s, border-color 0.2s;
+  box-shadow: 0 0 10px var(--neon-blue), inset 0 0 8px rgba(0,212,255,0.1);
+}
+#cursor-inner {
+  position: fixed; top: 0; left: 0;
+  width: 6px; height: 6px;
+  background: var(--neon-blue);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 99999;
+  box-shadow: 0 0 8px var(--neon-blue);
+  transition: background 0.2s;
+}
+body.hovering #cursor-outer {
+  width: 48px; height: 48px;
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 20px var(--neon-purple);
+}
+body.clicking #cursor-inner {
+  width: 12px; height: 12px;
+  background: var(--neon-purple);
+}
+
+/* ===== CANVAS (Three.js) ===== */
+#bg-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+}
+
+/* ===== SCREENS ===== */
+.screen {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.screen.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ===== LANDING SCREEN ===== */
+#landing {
+  flex-direction: column;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(0,70,120,0.25) 0%, transparent 70%);
+}
+
+.logo-container { margin-bottom: 2rem; }
+
+.logo-title {
+  font-size: clamp(3rem, 8vw, 7rem);
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #fff 0%, var(--neon-blue) 40%, var(--neon-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 30px rgba(0,212,255,0.6));
+  animation: logoFloat 4s ease-in-out infinite;
+}
+
+.logo-subtitle {
+  font-size: clamp(0.7rem, 1.5vw, 1rem);
+  letter-spacing: 0.6em;
+  text-transform: uppercase;
+  color: var(--neon-blue);
+  opacity: 0.7;
+  margin-top: 0.5rem;
+}
+
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 30px rgba(0,212,255,0.6)); }
+  50% { transform: translateY(-10px); filter: drop-shadow(0 0 50px rgba(0,212,255,0.9)); }
+}
+
+.press-to-begin {
+  font-size: clamp(0.85rem, 1.5vw, 1.1rem);
+  letter-spacing: 0.35em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  animation: pulse 2.5s ease-in-out infinite;
+  cursor: pointer;
+  padding: 1rem 2.5rem;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  border-radius: 4px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+.press-to-begin::before {
+  content: '';
+  position: absolute; top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.15), transparent);
+  animation: shimmer 3s infinite;
+}
+@keyframes shimmer { to { left: 200%; } }
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+  50% { opacity: 0.65; box-shadow: 0 0 40px rgba(0,212,255,0.6); }
+}
+.press-to-begin:hover {
+  background: rgba(0,212,255,0.12);
+  box-shadow: 0 0 40px rgba(0,212,255,0.5);
+  animation: none;
+  opacity: 1;
+}
+
+/* ===== GAME SCREEN ===== */
+#game { flex-direction: column; gap: 0; align-items: stretch; padding: 0; }
+
+/* ===== HUD ===== */
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: var(--dark-panel);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  z-index: 20;
+  position: relative;
+}
+
+.hud-block {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 120px;
+}
+.hud-label {
+  font-size: 0.6rem; letter-spacing: 0.2em;
+  color: var(--text-muted); text-transform: uppercase;
+}
+.hud-value {
+  font-size: 1.5rem; font-weight: 800;
+  color: var(--text-primary);
+  text-shadow: 0 0 15px var(--neon-blue);
+}
+.hud-center {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.round-badge {
+  font-size: 0.65rem; letter-spacing: 0.3em; color: var(--neon-blue);
+  text-transform: uppercase;
+}
+.score-display {
+  display: flex; gap: 1.5rem; align-items: center;
+}
+.score-num {
+  font-size: 2.5rem; font-weight: 900; color: var(--text-primary);
+  text-shadow: 0 0 20px currentColor;
+}
+.score-sep { font-size: 1.5rem; color: var(--text-muted); }
+#player-score-num { color: var(--neon-blue); text-shadow: 0 0 20px var(--neon-blue); }
+#computer-score-num { color: var(--neon-purple); text-shadow: 0 0 20px var(--neon-purple); }
+
+/* pip indicators */
+.pip-row { display: flex; gap: 6px; margin-top: 2px; }
+.pip { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
+.pip.win { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+.pip.loss { background: var(--neon-pink); box-shadow: 0 0 8px var(--neon-pink); }
+
+/* ===== ARENA ===== */
+.arena {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  align-items: center;
+  padding: 1rem 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* hand stages */
+.hand-stage {
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  position: relative;
+}
+.hand-label {
+  font-size: 0.65rem; letter-spacing: 0.25em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.hand-display {
+  width: clamp(160px, 20vw, 280px);
+  height: clamp(160px, 20vw, 280px);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.hand-aura {
+  position: absolute; inset: -20px;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.player-stage .hand-aura { background: radial-gradient(circle, rgba(0,212,255,0.25) 0%, transparent 70%); }
+.computer-stage .hand-aura { background: radial-gradient(circle, rgba(176,64,255,0.25) 0%, transparent 70%); }
+
+.hand-svg {
+  width: 100%; height: 100%;
+  filter: drop-shadow(0 0 20px rgba(0,180,255,0.5));
+  transition: transform 0.15s ease, filter 0.3s;
+  animation: handIdle 3s ease-in-out infinite;
+}
+.computer-stage .hand-svg {
+  transform: scaleX(-1);
+  filter: drop-shadow(0 0 20px rgba(180,80,255,0.5));
+  animation: handIdle 3.3s ease-in-out infinite;
+}
+.computer-stage .hand-svg { animation-delay: -1.2s; }
+
+@keyframes handIdle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-8px) rotate(-1.5deg); }
+  66% { transform: translateY(-4px) rotate(1deg); }
+}
+.computer-stage .hand-svg { transform-origin: center; }
+
+.hand-choice-label {
+  font-size: 0.9rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--text-primary); font-weight: 700;
+  opacity: 0; transition: opacity 0.4s;
+  text-shadow: 0 0 15px var(--neon-blue);
+  min-height: 1.4em;
+}
+
+/* ===== CENTER VS / COUNTDOWN ===== */
+.arena-center {
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  min-width: 120px;
+}
+
+.vs-badge {
+  font-size: 2rem; font-weight: 900; letter-spacing: 0.1em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.2);
+  text-transform: uppercase;
+  transition: opacity 0.3s;
+}
+
+#countdown-display {
+  font-size: clamp(3rem, 7vw, 6rem);
+  font-weight: 900;
+  min-height: 1.2em;
+  color: var(--neon-blue);
+  text-shadow: 0 0 40px var(--neon-blue), 0 0 80px var(--neon-blue);
+  transition: all 0.2s;
+  text-align: center;
+  display: none;
+}
+
+#result-text {
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+  min-height: 1.4em;
+  display: none;
+  text-shadow: 0 0 30px currentColor;
+}
+
+/* ===== CHOICE BUTTONS ===== */
+.choice-bar {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.2rem 2rem;
+  background: var(--dark-panel);
+  border-top: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  position: relative;
+  z-index: 20;
+}
+
+.choice-btn {
+  position: relative;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 0.5rem;
+  width: clamp(80px, 12vw, 130px);
+  height: clamp(80px, 12vw, 130px);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+.choice-btn::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(176,64,255,0.1));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.choice-btn:hover::before { opacity: 1; }
+.choice-btn:hover {
+  transform: translateY(-6px) scale(1.05);
+  border-color: var(--neon-blue);
+  box-shadow: 0 15px 40px rgba(0,212,255,0.3), 0 0 0 1px rgba(0,212,255,0.3);
+}
+.choice-btn:active { transform: translateY(-2px) scale(0.98); }
+.choice-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+.choice-btn .btn-icon {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(0,212,255,0.6));
+  transition: transform 0.3s;
+}
+.choice-btn:hover .btn-icon { transform: scale(1.2) rotate(-5deg); }
+.choice-btn .btn-label { font-weight: 700; }
+
+/* glow ring around selected */
+.choice-btn.selected {
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 30px rgba(0,212,255,0.5), inset 0 0 20px rgba(0,212,255,0.08);
+}
+
+/* ===== CLICK RIPPLE ===== */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(0,212,255,0.4);
+  transform: scale(0);
+  animation: rippleAnim 0.6s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes rippleAnim {
+  to { transform: scale(4); opacity: 0; }
+}
+
+/* ===== RESULT OVERLAY ===== */
+#result-overlay {
+  position: fixed; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 50;
+  pointer-events: none;
+}
+#result-overlay.show {
+  display: flex;
+}
+
+/* ===== GAME OVER SCREEN ===== */
+#gameover {
+  flex-direction: column;
+  text-align: center;
+  gap: 1.5rem;
+  background: radial-gradient(ellipse at center, rgba(0,50,100,0.4) 0%, transparent 70%);
+}
+
+.gameover-title {
+  font-size: clamp(2rem, 6vw, 5rem);
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.gameover-title.victory {
+  background: linear-gradient(135deg, var(--neon-gold), #fff, var(--neon-gold));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 30px rgba(255,215,0,0.6));
+  animation: goldPulse 2s ease-in-out infinite;
+}
+.gameover-title.defeat {
+  background: linear-gradient(135deg, var(--neon-pink), #888, var(--neon-pink));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 30px rgba(255,0,128,0.4));
+}
+
+@keyframes goldPulse {
+  0%, 100% { filter: drop-shadow(0 0 30px rgba(255,215,0,0.6)); }
+  50% { filter: drop-shadow(0 0 60px rgba(255,215,0,1)); }
+}
+
+.gameover-score {
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+.gameover-score span { color: var(--text-primary); font-weight: 700; }
+
+.gameover-btns {
+  display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 0.9rem 2.5rem;
+  border: none; border-radius: 6px;
+  font-size: 0.85rem; letter-spacing: 0.25em; text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s;
+  position: relative; overflow: hidden;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+  color: #fff;
+  box-shadow: 0 0 30px rgba(0,212,255,0.4);
+}
+.btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 40px rgba(0,212,255,0.6);
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  backdrop-filter: blur(10px);
+}
+.btn-secondary:hover {
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  transform: translateY(-3px);
+}
+
+/* ===== STATUS MSG ===== */
+#status-msg {
+  font-size: clamp(0.75rem, 1.5vw, 1rem);
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.4rem;
+  min-height: 1.8em;
+  transition: color 0.3s;
+}
+
+/* ===== PARTICLE CANVAS ===== */
+#particle-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ===== SCREEN FLASH ===== */
+#screen-flash {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  opacity: 0;
+}
+
+/* ===== SCAN LINES ===== */
+.scanlines {
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 8;
+}
+
+/* ===== CORNER DECORATIONS ===== */
+.corner-deco {
+  position: fixed;
+  width: 60px; height: 60px;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0.4;
+}
+.corner-deco.tl { top: 12px; left: 12px; border-top: 1.5px solid var(--neon-blue); border-left: 1.5px solid var(--neon-blue); }
+.corner-deco.tr { top: 12px; right: 12px; border-top: 1.5px solid var(--neon-blue); border-right: 1.5px solid var(--neon-blue); }
+.corner-deco.bl { bottom: 12px; left: 12px; border-bottom: 1.5px solid var(--neon-blue); border-left: 1.5px solid var(--neon-blue); }
+.corner-deco.br { bottom: 12px; right: 12px; border-bottom: 1.5px solid var(--neon-blue); border-right: 1.5px solid var(--neon-blue); }
+
+/* ===== STREAK BADGE ===== */
+#streak-badge {
+  position: fixed; top: 90px; right: 16px;
+  background: linear-gradient(135deg, var(--neon-gold), #ff8c00);
+  color: #000;
+  font-size: 0.65rem; font-weight: 900;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 20px;
+  display: none; z-index: 30;
+  box-shadow: 0 0 20px rgba(255,215,0,0.6);
+  animation: streakPop 0.4s ease;
+}
+@keyframes streakPop {
+  0% { transform: scale(0.5) rotate(-10deg); }
+  70% { transform: scale(1.15) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* ===== SHAKE ===== */
+@keyframes screenShake {
+  0%, 100% { transform: translate(0,0) rotate(0); }
+  20% { transform: translate(-8px, 4px) rotate(-0.5deg); }
+  40% { transform: translate(8px,-4px) rotate(0.5deg); }
+  60% { transform: translate(-4px, 6px) rotate(-0.3deg); }
+  80% { transform: translate(4px,-2px) rotate(0.3deg); }
+}
+.shake { animation: screenShake 0.45s ease-out; }
+
+/* ===== GLOW INTENSIFY ===== */
+@keyframes winGlow {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(1.3) saturate(1.5); }
+  100% { filter: brightness(1); }
+}
+.win-glow { animation: winGlow 0.8s ease; }
+
+/* ===== COUNTDOWN NUMBER BURST ===== */
+@keyframes countBurst {
+  0% { transform: scale(0.3); opacity: 0; }
+  30% { transform: scale(1.3); opacity: 1; }
+  70% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.count-burst { animation: countBurst 0.7s ease forwards; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .hud { padding: 0.6rem 1rem; }
+  .hud-block { min-width: 80px; }
+  .arena { padding: 0.5rem 0.8rem; gap: 0.3rem; }
+  .choice-bar { padding: 0.8rem; gap: 0.8rem; }
+  .choice-btn { width: 75px; height: 75px; }
+}
+
+@media (max-width: 480px) {
+  .arena { grid-template-columns: 1fr 60px 1fr; }
+  .hand-display { width: 130px; height: 130px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Cursor -->
+<div id="cursor-outer"></div>
+<div id="cursor-inner"></div>
+
+<!-- Three.js Background -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- Particle Canvas -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- Screen Flash FX -->
+<div id="screen-flash"></div>
+
+<!-- Scan Lines -->
+<div class="scanlines"></div>
+
+<!-- Corner Decorations -->
+<div class="corner-deco tl"></div>
+<div class="corner-deco tr"></div>
+<div class="corner-deco bl"></div>
+<div class="corner-deco br"></div>
+
+<!-- Streak Badge -->
+<div id="streak-badge">🔥 <span id="streak-count">0</span>x STREAK</div>
+
+<!-- ===== LANDING SCREEN ===== -->
+<div id="landing" class="screen active">
+  <div class="logo-container">
+    <h1 class="logo-title">NEXUS</h1>
+    <p class="logo-subtitle">Rock · Paper · Scissors</p>
+  </div>
+  <button class="press-to-begin" id="enter-btn" onclick="enterGame()">
+    ⬡ &nbsp; PRESS ANYWHERE TO BEGIN &nbsp; ⬡
+  </button>
+</div>
+
+<!-- ===== GAME SCREEN ===== -->
+<div id="game" class="screen">
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-block">
+      <div class="hud-label">Player</div>
+      <div class="hud-value" id="player-score-num">0</div>
+      <div class="pip-row" id="player-pips"></div>
+    </div>
+
+    <div class="hud-center">
+      <div class="round-badge">⬡ &nbsp; BEST OF 5 &nbsp; ⬡</div>
+      <div class="score-display">
+        <div class="score-num" id="player-score-num-large">0</div>
+        <div class="score-sep">—</div>
+        <div class="score-num" id="computer-score-num-large">0</div>
+      </div>
+      <div id="status-msg">Choose your weapon</div>
+    </div>
+
+    <div class="hud-block">
+      <div class="hud-label">NEXUS</div>
+      <div class="hud-value" id="computer-score-num" style="color:var(--neon-purple);text-shadow:0 0 20px var(--neon-purple)">0</div>
+      <div class="pip-row" id="computer-pips"></div>
+    </div>
+  </div>
+
+  <!-- Arena -->
+  <div class="arena">
+
+    <!-- Player Hand -->
+    <div class="hand-stage player-stage">
+      <div class="hand-label">YOU</div>
+      <div class="hand-display" id="player-hand-display">
+        <div class="hand-aura" id="player-aura"></div>
+        <svg id="player-hand-svg" class="hand-svg" viewBox="0 0 200 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Rock (fist) shape -->
+          <g id="player-hand-group">
+            <!-- Palm -->
+            <ellipse cx="100" cy="160" rx="72" ry="68" fill="url(#skinGrad1)" />
+            <!-- Fingers folded (rock) -->
+            <rect x="45" y="118" width="30" height="52" rx="15" fill="url(#skinGrad1)"/>
+            <rect x="82" y="108" width="32" height="60" rx="16" fill="url(#skinGrad1)"/>
+            <rect x="120" y="112" width="30" height="56" rx="15" fill="url(#skinGrad1)"/>
+            <rect x="153" y="118" width="24" height="48" rx="12" fill="url(#skinGrad1)"/>
+            <!-- Knuckle highlights -->
+            <ellipse cx="60" cy="118" rx="12" ry="8" fill="url(#skinHighlight)"/>
+            <ellipse cx="98" cy="108" rx="13" ry="8" fill="url(#skinHighlight)"/>
+            <ellipse cx="135" cy="112" rx="12" ry="8" fill="url(#skinHighlight)"/>
+            <ellipse cx="165" cy="118" rx="10" ry="7" fill="url(#skinHighlight)"/>
+            <!-- Thumb -->
+            <ellipse cx="30" cy="145" rx="22" ry="14" fill="url(#skinGrad1)" transform="rotate(-15 30 145)"/>
+            <!-- Wrist -->
+            <rect x="52" y="200" width="96" height="40" rx="8" fill="url(#skinGrad1)"/>
+            <!-- Neon glow ring under hand -->
+            <ellipse cx="100" cy="228" rx="55" ry="6" fill="url(#glowRing1)" opacity="0.7"/>
+            <defs>
+              <radialGradient id="skinGrad1" cx="40%" cy="35%" r="65%">
+                <stop offset="0%" stop-color="#d4956e"/>
+                <stop offset="60%" stop-color="#b87248"/>
+                <stop offset="100%" stop-color="#8a5230"/>
+              </radialGradient>
+              <radialGradient id="skinHighlight" cx="50%" cy="30%" r="60%">
+                <stop offset="0%" stop-color="#e8b090" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#c07850" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="glowRing1" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+          </g>
+        </svg>
+      </div>
+      <div class="hand-choice-label" id="player-choice-label">—</div>
+    </div>
+
+    <!-- Center -->
+    <div class="arena-center">
+      <div class="vs-badge" id="vs-badge">VS</div>
+      <div id="countdown-display"></div>
+      <div id="result-text"></div>
+    </div>
+
+    <!-- Computer Hand -->
+    <div class="hand-stage computer-stage">
+      <div class="hand-label">NEXUS</div>
+      <div class="hand-display" id="computer-hand-display">
+        <div class="hand-aura" id="computer-aura"></div>
+        <svg id="computer-hand-svg" class="hand-svg" viewBox="0 0 200 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <g id="computer-hand-group">
+            <ellipse cx="100" cy="160" rx="72" ry="68" fill="url(#skinGrad2)" />
+            <rect x="45" y="118" width="30" height="52" rx="15" fill="url(#skinGrad2)"/>
+            <rect x="82" y="108" width="32" height="60" rx="16" fill="url(#skinGrad2)"/>
+            <rect x="120" y="112" width="30" height="56" rx="15" fill="url(#skinGrad2)"/>
+            <rect x="153" y="118" width="24" height="48" rx="12" fill="url(#skinGrad2)"/>
+            <ellipse cx="60" cy="118" rx="12" ry="8" fill="url(#skinHighlight2)"/>
+            <ellipse cx="98" cy="108" rx="13" ry="8" fill="url(#skinHighlight2)"/>
+            <ellipse cx="135" cy="112" rx="12" ry="8" fill="url(#skinHighlight2)"/>
+            <ellipse cx="165" cy="118" rx="10" ry="7" fill="url(#skinHighlight2)"/>
+            <ellipse cx="30" cy="145" rx="22" ry="14" fill="url(#skinGrad2)" transform="rotate(-15 30 145)"/>
+            <rect x="52" y="200" width="96" height="40" rx="8" fill="url(#skinGrad2)"/>
+            <ellipse cx="100" cy="228" rx="55" ry="6" fill="url(#glowRing2)" opacity="0.7"/>
+            <defs>
+              <radialGradient id="skinGrad2" cx="40%" cy="35%" r="65%">
+                <stop offset="0%" stop-color="#a87868"/>
+                <stop offset="60%" stop-color="#8a5850"/>
+                <stop offset="100%" stop-color="#5a3028"/>
+              </radialGradient>
+              <radialGradient id="skinHighlight2" cx="50%" cy="30%" r="60%">
+                <stop offset="0%" stop-color="#c09088" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#906050" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="glowRing2" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#b040ff" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#b040ff" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+          </g>
+        </svg>
+      </div>
+      <div class="hand-choice-label" id="computer-choice-label">—</div>
+    </div>
+
+  </div><!-- /arena -->
+
+  <!-- Choice Buttons -->
+  <div class="choice-bar">
+    <button class="choice-btn" id="btn-rock" onclick="play('rock')" title="Rock [1]">
+      <span class="btn-icon">✊</span>
+      <span class="btn-label">Rock</span>
+    </button>
+    <button class="choice-btn" id="btn-paper" onclick="play('paper')" title="Paper [2]">
+      <span class="btn-icon">✋</span>
+      <span class="btn-label">Paper</span>
+    </button>
+    <button class="choice-btn" id="btn-scissors" onclick="play('scissors')" title="Scissors [3]">
+      <span class="btn-icon">✌️</span>
+      <span class="btn-label">Scissors</span>
+    </button>
+  </div>
+
+</div><!-- /game screen -->
+
+<!-- ===== GAME OVER SCREEN ===== -->
+<div id="gameover" class="screen">
+  <h2 class="gameover-title" id="gameover-title">VICTORY</h2>
+  <p class="gameover-score" id="gameover-score">You won <span>3</span> — <span>1</span></p>
+  <div class="gameover-btns">
+    <button class="btn-primary" onclick="restartGame()">⟳ &nbsp; PLAY AGAIN</button>
+    <button class="btn-secondary" onclick="goHome()">⌂ &nbsp; MAIN MENU</button>
+  </div>
+</div>
+
+<!-- Three.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+
+<script>
+/* ========================================
+   NEXUS — Rock Paper Scissors
+   Full cinematic implementation
+   ======================================== */
+
+// ===== STATE =====
+const STATE = {
+  playerScore: 0,
+  computerScore: 0,
+  maxScore: 3,        // first to 3 wins (best of 5)
+  playing: false,
+  streak: 0,
+  round: 0,
+  history: []
+};
+
+const CHOICES = ['rock', 'paper', 'scissors'];
+const BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+const ICONS = { rock: '✊', paper: '✋', scissors: '✌️' };
+const LABELS = { rock: 'ROCK', paper: 'PAPER', scissors: 'SCISSORS' };
+
+/* ========================================
+   CURSOR
+   ======================================== */
+const cursorOuter = document.getElementById('cursor-outer');
+const cursorInner = document.getElementById('cursor-inner');
+let mx = 0, my = 0, ox = 0, oy = 0;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursorInner.style.left = mx + 'px';
+  cursorInner.style.top = my + 'px';
+});
+
+function animateCursor() {
+  ox += (mx - ox) * 0.12;
+  oy += (my - oy) *.12;
+  cursorOuter.style.left = ox + 'px';
+  cursorOuter.style.top = oy + 'px';
+  requestAnimationFrame(animateCursor);
+}
+animateCursor();
+
+document.querySelectorAll('button, .press-to-begin, .choice-btn').forEach(el => {
+  el.addEventListener('mouseenter', () => document.body.classList.add('hovering'));
+  el.addEventListener('mouseleave', () => document.body.classList.remove('hovering'));
+});
+document.addEventListener('mousedown', () => document.body.classList.add('clicking'));
+document.addEventListener('mouseup', () => document.body.classList.remove('clicking'));
+
+/* ========================================
+   THREE.JS BACKGROUND
+   ======================================== */
+(function initThree() {
+  const canvas = document.getElementById('bg-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x020408, 1);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.4;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x020408, 0.035);
+
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
+  camera.position.set(0, 2, 18);
+
+  // ---- Ambient + directional ----
+  const ambient = new THREE.AmbientLight(0x0a1828, 0.8);
+  scene.add(ambient);
+
+  const dirBlue = new THREE.DirectionalLight(0x00d4ff, 1.5);
+  dirBlue.position.set(-8, 10, 5);
+  scene.add(dirBlue);
+
+  const dirPurple = new THREE.DirectionalLight(0xb040ff, 1.2);
+  dirPurple.position.set(8, 8, -5);
+  scene.add(dirPurple);
+
+  const pointCore = new THREE.PointLight(0x00d4ff, 2, 30);
+  pointCore.position.set(0, 5, 0);
+  scene.add(pointCore);
+
+  // ---- Grid floor ----
+  const gridHelper = new THREE.GridHelper(80, 40, 0x003366, 0x001133);
+  gridHelper.position.y = -6;
+  scene.add(gridHelper);
+
+  // ---- Floating geometries ----
+  const geoGroup = new THREE.Group();
+  scene.add(geoGroup);
+
+  const SHAPES = [
+    new THREE.OctahedronGeometry(0.5),
+    new THREE.TetrahedronGeometry(0.6),
+    new THREE.IcosahedronGeometry(0.4),
+    new THREE.BoxGeometry(0.6, 0.6, 0.6),
+    new THREE.TorusGeometry(0.4, 0.1, 8, 16),
+  ];
+
+  const matBlue = new THREE.MeshStandardMaterial({
+    color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 0.6,
+    wireframe: false, transparent: true, opacity: 0.7,
+    roughness: 0.2, metalness: 0.8
+  });
+  const matPurple = new THREE.MeshStandardMaterial({
+    color: 0xb040ff, emissive: 0xb040ff, emissiveIntensity: 0.5,
+    transparent: true, opacity: 0.7,
+    roughness: 0.2, metalness: 0.8
+  });
+  const matWire = new THREE.MeshStandardMaterial({
+    color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 0.8,
+    wireframe: true, transparent: true, opacity: 0.35
+  });
+
+  const floaters = [];
+  for (let i = 0; i < 55; i++) {
+    const geo = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+    const mat = [matBlue, matPurple, matWire][Math.floor(Math.random()*3)].clone();
+    mat.opacity *= 0.4 + Math.random() * 0.6;
+    const mesh = new THREE.Mesh(geo, mat);
+    const r = 8 + Math.random() * 18;
+    const a = Math.random() * Math.PI * 2;
+    mesh.position.set(
+      Math.cos(a) * r * 1.5,
+      -4 + Math.random() * 10,
+      Math.sin(a) * r - 5
+    );
+    const s = 0.3 + Math.random() * 1.2;
+    mesh.scale.setScalar(s);
+    mesh.userData = {
+      speed: 0.003 + Math.random() * 0.008,
+      rotX: (Math.random()-0.5) * 0.012,
+      rotY: (Math.random()-0.5) * 0.015,
+      floatSpeed: 0.3 + Math.random() * 0.7,
+      floatAmp: 0.4 + Math.random() * 1.2,
+      baseY: mesh.position.y,
+      phase: Math.random() * Math.PI * 2,
+      orbitR: r,
+      orbitA: a,
+      orbitSpeed: (Math.random()-0.5) * 0.003
+    };
+    geoGroup.add(mesh);
+    floaters.push(mesh);
+  }
+
+  // ---- Neon rings ----
+  for (let i = 0; i < 8; i++) {
+    const geo = new THREE.TorusGeometry(2 + i * 1.5, 0.03, 6, 40);
+    const mat = new THREE.MeshStandardMaterial({
+      color: i % 2 === 0 ? 0x00d4ff : 0xb040ff,
+      emissive: i % 2 === 0 ? 0x00d4ff : 0xb040ff,
+      emissiveIntensity: 1, transparent: true, opacity: 0.4
+    });
+    const ring = new THREE.Mesh(geo, mat);
+    ring.rotation.x = Math.PI / 2 + (Math.random()-0.5) * 0.5;
+    ring.position.set((Math.random()-0.5)*12, -3 + Math.random()*8, -5 - i*2);
+    ring.userData = { rotSpeed: (Math.random()-0.5) * 0.005 };
+    scene.add(ring);
+    floaters.push(ring);
+  }
+
+  // ---- Particle system ----
+  const PCOUNT = 2000;
+  const pPositions = new Float32Array(PCOUNT * 3);
+  const pColors = new Float32Array(PCOUNT * 3);
+  const pVelocities = [];
+  for (let i = 0; i < PCOUNT; i++) {
+    pPositions[i*3]   = (Math.random()-0.5) * 60;
+    pPositions[i*3+1] = (Math.random()-0.5) * 30;
+    pPositions[i*3+2] = (Math.random()-0.5) * 40 - 5;
+    pVelocities.push({ x: (Math.random()-0.5)*0.01, y: (Math.random()-0.5)*0.01, z: (Math.random()-0.5)*0.005 });
+    const t = Math.random();
+    pColors[i*3]   = t < 0.5 ? 0 : 0.7;
+    pColors[i*3+1] = t < 0.5 ? 0.83 : 0.25;
+    pColors[i*3+2] = t < 0.5 ? 1 : 1;
+  }
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(pColors, 3));
+  const pMat = new THREE.PointsMaterial({ size: 0.08, vertexColors: true, transparent: true, opacity: 0.7 });
+  const particles = new THREE.Points(pGeo, pMat);
+  scene.add(particles);
+
+  // ---- Mouse parallax ----
+  let targetCamX = 0, targetCamY = 2;
+  document.addEventListener('mousemove', e => {
+    targetCamX = (e.clientX / window.innerWidth - 0.5) * 2.5;
+    targetCamY = 2 - (e.clientY / window.innerHeight - 0.5) * 1.5;
+  });
+
+  // ---- Resize ----
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---- Animate ----
+  let t = 0;
+  function render() {
+    requestAnimationFrame(render);
+    t += 0.008;
+
+    // camera bob
+    camera.position.x += (targetCamX - camera.position.x) * 0.04;
+    camera.position.y += (targetCamY - camera.position.y) * 0.04;
+    camera.position.z = 18 + Math.sin(t * 0.3) * 0.8;
+    camera.lookAt(0, 0, 0);
+
+    // floaters
+    floaters.forEach(m => {
+      m.rotation.x += m.userData.rotX || 0;
+      m.rotation.y += m.userData.rotY || 0.005;
+      if (m.userData.orbitR) {
+        m.userData.orbitA += m.userData.orbitSpeed;
+        m.position.x = Math.cos(m.userData.orbitA) * m.userData.orbitR * 1.5;
+        m.position.z = Math.sin(m.userData.orbitA) * m.userData.orbitR - 5;
+      }
+      if (m.userData.floatAmp) {
+        m.position.y = m.userData.baseY + Math.sin(t * m.userData.floatSpeed + m.userData.phase) * m.userData.floatAmp;
+      }
+    });
+
+    // particles drift
+    const pos = pGeo.attributes.position.array;
+    for (let i = 0; i < PCOUNT; i++) {
+      pos[i*3]   += pVelocities[i].x;
+      pos[i*3+1] += pVelocities[i].y + 0.002;
+      pos[i*3+2] += pVelocities[i].z;
+      if (pos[i*3+1] > 15) pos[i*3+1] = -15;
+      if (Math.abs(pos[i*3]) > 30) pVelocities[i].x *= -1;
+      if (Math.abs(pos[i*3+2]) > 25) pVelocities[i].z *= -1;
+    }
+    pGeo.attributes.position.needsUpdate = true;
+
+    // lights pulse
+    pointCore.intensity = 2 + Math.sin(t*1.5) * 0.8;
+    dirBlue.intensity = 1.5 + Math.sin(t*0.7) * 0.4;
+
+    renderer.render(scene, camera);
+  }
+  render();
+
+  // Expose camera shake
+  window.__threeShake = function(intensity) {
+    const orig = { x: camera.position.x, y: camera.position.y };
+    let st = 0;
+    function shake() {
+      st++;
+      camera.position.x = orig.x + (Math.random()-0.5) * intensity;
+      camera.position.y = orig.y + (Math.random()-0.5) * intensity;
+      if (st < 10) requestAnimationFrame(shake);
+      else { camera.position.x = orig.x; camera.position.y = orig.y; }
+    }
+    shake();
+  };
+  window.__threeScene = scene;
+  window.__threeRenderer = renderer;
+})();
+
+/* ========================================
+   2D PARTICLE SYSTEM (canvas)
+   ======================================== */
+const pCanvas = document.getElementById('particle-canvas');
+const pCtx = pCanvas.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight;
+pCanvas.width = W; pCanvas.height = H;
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight;
+  pCanvas.width = W; pCanvas.height = H;
+});
+
+const pool2d = [];
+function spawn2D(x, y, opts = {}) {
+  const count = opts.count || 25;
+  for (let i = 0; i < count; i++) {
+    const angle = opts.angle !== undefined ? opts.angle + (Math.random()-0.5)*0.8 : Math.random()*Math.PI*2;
+    const speed = opts.speed || (1 + Math.random()*4);
+    pool2d.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.03,
+      size: opts.size || (2 + Math.random() * 5),
+      color: opts.color || (Math.random() > 0.5 ? '#00d4ff' : '#b040ff'),
+      gravity: opts.gravity !== undefined ? opts.gravity : 0.06
+    });
+  }
+}
+
+// cursor trail
+let cTrail = [];
+document.addEventListener('mousemove', e => {
+  cTrail.push({ x: e.clientX, y: e.clientY, life: 1 });
+  if (cTrail.length > 20) cTrail.shift();
+});
+
+function render2D() {
+  requestAnimationFrame(render2D);
+  pCtx.clearRect(0, 0, W, H);
+
+  // cursor trail
+  for (let i = cTrail.length - 1; i >= 0; i--) {
+    const p = cTrail[i];
+    p.life -= 0.07;
+    if (p.life <= 0) { cTrail.splice(i, 1); continue; }
+    pCtx.beginPath();
+    pCtx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+    pCtx.fillStyle = `rgba(0,212,255,${p.life * 0.5})`;
+    pCtx.fill();
+  }
+
+  // particles
+  for (let i = pool2d.length - 1; i >= 0; i--) {
+    const p = pool2d[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += p.gravity;
+    p.vx *= 0.97; p.vy *= 0.97;
+    p.life -= p.decay;
+    if (p.life <= 0) { pool2d.splice(i, 1); continue; }
+
+    pCtx.save();
+    pCtx.globalAlpha = p.life;
+    pCtx.shadowColor = p.color;
+    pCtx.shadowBlur = 6;
+    pCtx.fillStyle = p.color;
+    pCtx.beginPath();
+    pCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    pCtx.fill();
+    pCtx.restore();
+  }
+}
+render2D();
+
+/* ========================================
+   SCREEN FLASH
+   ======================================== */
+function flash(color = 'rgba(0,212,255,0.35)', dur = 400) {
+  const el = document.getElementById('screen-flash');
+  el.style.background = color;
+  el.style.opacity = '1';
+  el.style.transition = 'none';
+  setTimeout(() => {
+    el.style.transition = `opacity ${dur}ms ease`;
+    el.style.opacity = '0';
+  }, 30);
+}
+
+/* ========================================
+   SVG HAND MORPHING
+   ======================================== */
+// Hand shape configurations
+const HAND_SHAPES = {
+  rock: {
+    // fist - fingers bent
+    fingers: [
+      { x: 45, y: 118, w: 30, h: 52 },
+      { x: 82, y: 108, w: 32, h: 60 },
+      { x: 120, y: 112, w: 30, h: 56 },
+      { x: 153, y: 118, w: 24, h: 48 }
+    ],
+    palmRy: 68, thumbAngle: -15, palmCy: 160
+  },
+  paper: {
+    fingers: [
+      { x: 38, y: 60, w: 28, h: 90 },
+      { x: 74, y: 44, w: 30, h: 100 },
+      { x: 112, y: 48, w: 28, h: 96 },
+      { x: 148, y: 60, w: 26, h: 82 }
+    ],
+    palmRy: 65, thumbAngle: -40, palmCy: 165
+  },
+  scissors: {
+    fingers: [
+      { x: 38, y: 118, w: 30, h: 52 },
+      { x: 74, y: 52, w: 30, h: 96 },
+      { x: 112, y: 48, w: 28, h: 100 },
+      { x: 148, y: 118, w: 26, h: 52 }
+    ],
+    palmRy: 66, thumbAngle: -12, palmCy: 162
+  }
+};
+
+function morphHand(svgId, choice, side = 'player') {
+  const svg = document.getElementById(svgId);
+  const shape = HAND_SHAPES[choice];
+  if (!shape) return;
+
+  const palmEl = svg.querySelector('ellipse:first-child') || svg.querySelector('ellipse');
+  const rects = svg.querySelectorAll('rect');
+  const thumbEl = svg.querySelector('ellipse:nth-child(7)');
+
+  // animate palm cy
+  if (palmEl) {
+    palmEl.setAttribute('ry', shape.palmRy);
+    palmEl.setAttribute('cy', shape.palmCy);
+  }
+
+  // animate finger rects
+  rects.forEach((rect, i) => {
+    if (i < 4 && shape.fingers[i]) {
+      const f = shape.fingers[i];
+      rect.setAttribute('x', f.x);
+      rect.setAttribute('y', f.y);
+      rect.setAttribute('width', f.w);
+      rect.setAttribute('height', f.h);
+    }
+  });
+}
+
+/* ========================================
+   SHAKE ANIMATION
+   ======================================== */
+function animateHandShake(svgId, onDone) {
+  const svg = document.getElementById(svgId);
+  const group = svg.querySelector('g');
+  if (!group) { onDone && onDone(); return; }
+
+  const bounces = [
+    { y: '0', delay: 0 }, { y: '-20px', delay: 180 },
+    { y: '0', delay: 360 }, { y: '-20px', delay: 540 },
+    { y: '0', delay: 720 }, { y: '-20px', delay: 900 },
+    { y: '0', delay: 1080 }
+  ];
+
+  let kf = bounces.map(b => `translateY(${b.y})`);
+  let offsets = bounces.map(b => b.delay / 1200);
+
+  svg.animate(
+    { transform: kf },
+    { duration: 1200, easing: 'ease-in-out', fill: 'forwards', offset: offsets }
+  ).onfinish = () => { svg.style.transform = ''; onDone && onDone(); };
+}
+
+/* ========================================
+   COUNTDOWN
+   ======================================== */
+function runCountdown(onDone) {
+  const el = document.getElementById('countdown-display');
+  const vsEl = document.getElementById('vs-badge');
+  vsEl.style.opacity = '0';
+  el.style.display = 'block';
+
+  const steps = [
+    { text: '3', color: '#00d4ff', flashColor: 'rgba(0,212,255,0.15)' },
+    { text: '2', color: '#b040ff', flashColor: 'rgba(176,64,255,0.15)' },
+    { text: '1', color: '#ff0080', flashColor: 'rgba(255,0,128,0.15)' },
+    { text: 'SHOOT!', color: '#ffd700', flashColor: 'rgba(255,215,0,0.2)' }
+  ];
+
+  let i = 0;
+  function nextStep() {
+    if (i >= steps.length) {
+      el.style.display = 'none';
+      vsEl.style.opacity = '1';
+      onDone();
+      return;
+    }
+    const s = steps[i++];
+    el.textContent = s.text;
+    el.style.color = s.color;
+    el.style.textShadow = `0 0 40px ${s.color}, 0 0 80px ${s.color}`;
+    el.className = 'count-burst';
+    setTimeout(() => { el.className = ''; }, 700);
+    flash(s.flashColor, 300);
+    if (window.__threeShake) window.__threeShake(0.15);
+
+    // burst particles
+    spawn2D(W/2, H/2, { count: 30, color: s.color, speed: 3 + Math.random()*3 });
+
+    setTimeout(nextStep, 750);
+  }
+  nextStep();
+}
+
+/* ========================================
+   GAME LOGIC
+   ======================================== */
+function setStatus(msg, color = 'var(--text-muted)') {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.style.color = color;
+}
+
+function updateHUD() {
+  document.getElementById('player-score-num').textContent = STATE.playerScore;
+  document.getElementById('computer-score-num').textContent = STATE.computerScore;
+  document.getElementById('player-score-num-large').textContent = STATE.playerScore;
+  document.getElementById('computer-score-num-large').textContent = STATE.computerScore;
+  updatePips();
+}
+
+function updatePips() {
+  const makeRow = (container, wins, losses) => {
+    container.innerHTML = '';
+    for (let i = 0; i < STATE.maxScore; i++) {
+      const pip = document.createElement('div');
+      pip.className = 'pip' + (i < wins ? ' win' : i < wins + losses ? ' loss' : '');
+      container.appendChild(pip);
+    }
+  };
+  makeRow(document.getElementById('player-pips'), STATE.playerScore, 0);
+  makeRow(document.getElementById('computer-pips'), STATE.computerScore, 0);
+}
+
+function setChoiceLabels(p, c) {
+  const pl = document.getElementById('player-choice-label');
+  const cl = document.getElementById('computer-choice-label');
+  pl.textContent = p ? LABELS[p] : '—';
+  pl.style.opacity = p ? '1' : '0';
+  cl.textContent = c ? LABELS[c] : '—';
+  cl.style.opacity = c ? '1' : '0';
+}
+
+function lockButtons() {
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+}
+function unlockButtons() {
+  document.querySelectorAll('.choice-btn').forEach(b => {
+    b.disabled = false;
+    b.classList.remove('selected');
+  });
+}
+
+function highlightBtn(choice) {
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('btn-' + choice)?.classList.add('selected');
+}
+
+function showResult(outcome) {
+  const el = document.getElementById('result-text');
+  el.style.display = 'block';
+  if (outcome === 'win') {
+    el.textContent = 'YOU WIN';
+    el.style.color = '#00ff88';
+    el.style.textShadow = '0 0 30px #00ff88';
+  } else if (outcome === 'lose') {
+    el.textContent = 'NEXUS WINS';
+    el.style.color = '#ff0080';
+    el.style.textShadow = '0 0 30px #ff0080';
+  } else {
+    el.textContent = 'DRAW';
+    el.style.color = '#00d4ff';
+    el.style.textShadow = '0 0 30px #00d4ff';
+  }
+}
+
+function hideResult() {
+  document.getElementById('result-text').style.display = 'none';
+}
+
+function doWinFX(side) {
+  const x = side === 'player' ? W * 0.25 : W * 0.75;
+  const colors = side === 'player' ? ['#ffd700','#00ff88','#00d4ff'] : ['#b040ff','#ff0080','#ff6600'];
+  colors.forEach(c => spawn2D(x, H * 0.5, { count: 40, color: c, speed: 4 + Math.random()*5, gravity: 0.1 }));
+  flash('rgba(255,215,0,0.15)', 600);
+  if (window.__threeShake) window.__threeShake(0.5);
+  document.getElementById(side === 'player' ? 'player-aura' : 'computer-aura').style.opacity = '1';
+  setTimeout(() => {
+    document.getElementById(side === 'player' ? 'player-aura' : 'computer-aura').style.opacity = '0';
+  }, 1200);
+}
+
+function doLoseFX() {
+  flash('rgba(255,0,128,0.2)', 600);
+  document.body.classList.add('shake');
+  if (window.__threeShake) window.__threeShake(0.8);
+  setTimeout(() => document.body.classList.remove('shake'), 500);
+  spawn2D(W/2, H/2, { count: 30, color: '#ff0080', speed: 3, gravity: 0.12 });
+}
+
+function doTieFX() {
+  flash('rgba(0,212,255,0.15)', 400);
+  spawn2D(W/2, H/2, { count: 20, color: '#00d4ff', speed: 2 });
+  spawn2D(W/2, H/2, { count: 20, color: '#b040ff', speed: 2 });
+}
+
+function updateStreak(won) {
+  if (won) {
+    STATE.streak++;
+    if (STATE.streak >= 2) {
+      const badge = document.getElementById('streak-badge');
+      document.getElementById('streak-count').textContent = STATE.streak;
+      badge.style.display = 'block';
+      badge.style.animation = 'none';
+      void badge.offsetWidth;
+      badge.style.animation = 'streakPop 0.4s ease';
+    }
+  } else {
+    STATE.streak = 0;
+    document.getElementById('streak-badge').style.display = 'none';
+  }
+}
+
+async function play(choice) {
+  if (STATE.playing) return;
+  STATE.playing = true;
+  STATE.round++;
+
+  highlightBtn(choice);
+  lockButtons();
+  hideResult();
+  setChoiceLabels(null, null);
+  setStatus('Get ready…');
+
+  // show player hand immediately as rock (shake position)
+  morphHand('player-hand-svg', 'rock');
+
+  // run countdown
+  await new Promise(resolve => {
+    runCountdown(() => {
+      // shake phase: both hands show rock three times
+      animateHandShake('player-hand-svg', null);
+      animateHandShake('computer-hand-svg', () => {
+        resolve();
+      });
+    });
+  });
+
+  // computer picks
+  const compChoice = CHOICES[Math.floor(Math.random() * 3)];
+
+  // reveal choices simultaneously
+  morphHand('player-hand-svg', choice);
+  morphHand('computer-hand-svg', compChoice);
+
+  // particle burst on reveal
+  spawn2D(W*0.25, H*0.5, { count: 20, color: '#00d4ff', speed: 3 });
+  spawn2D(W*0.75, H*0.5, { count: 20, color: '#b040ff', speed: 3 });
+
+  setTimeout(() => {
+    setChoiceLabels(choice, compChoice);
+
+    // determine winner
+    let outcome;
+    if (choice === compChoice) outcome = 'tie';
+    else if (BEATS[choice] === compChoice) outcome = 'win';
+    else outcome = 'lose';
+
+    showResult(outcome);
+    STATE.history.push({ player: choice, computer: compChoice, outcome });
+
+    if (outcome === 'win') {
+      STATE.playerScore++;
+      updateStreak(true);
+      doWinFX('player');
+      setStatus('🏆 Excellent move!', '#00ff88');
+    } else if (outcome === 'lose') {
+      STATE.computerScore++;
+      updateStreak(false);
+      doLoseFX();
+      setStatus('💀 NEXUS wins this round.', '#ff0080');
+    } else {
+      doTieFX();
+      setStatus('⚡ It\'s a draw!', '#00d4ff');
+    }
+
+    updateHUD();
+
+    // check for game over
+    setTimeout(() => {
+      if (STATE.playerScore >= STATE.maxScore || STATE.computerScore >= STATE.maxScore) {
+        setTimeout(() => showGameOver(), 800);
+      } else {
+        // reset for next round
+        setTimeout(() => {
+          hideResult();
+          morphHand('player-hand-svg', 'rock');
+          morphHand('computer-hand-svg', 'rock');
+          setChoiceLabels(null, null);
+          setStatus('Choose your weapon');
+          unlockButtons();
+          STATE.playing = false;
+        }, 1800);
+      }
+    }, 300);
+
+  }, 400);
+}
+
+/* ========================================
+   GAME OVER
+   ======================================== */
+function showGameOver() {
+  const won = STATE.playerScore >= STATE.maxScore;
+
+  const title = document.getElementById('gameover-title');
+  const score = document.getElementById('gameover-score');
+
+  title.textContent = won ? 'VICTORY' : 'DEFEATED';
+  title.className = 'gameover-title ' + (won ? 'victory' : 'defeat');
+  score.innerHTML = `${won ? 'You won' : 'NEXUS won'} &nbsp;<span>${STATE.playerScore}</span> — <span>${STATE.computerScore}</span>`;
+
+  showScreen('gameover');
+
+  if (won) {
+    // big confetti burst
+    for (let i = 0; i < 8; i++) {
+      setTimeout(() => {
+        spawn2D(Math.random()*W, H*0.3, {
+          count: 50,
+          color: ['#ffd700','#00ff88','#00d4ff','#ff0080','#b040ff'][Math.floor(Math.random()*5)],
+          speed: 5 + Math.random()*5,
+          gravity: 0.15
+        });
+      }, i * 200);
+    }
+    flash('rgba(255,215,0,0.2)', 1000);
+  } else {
+    flash('rgba(255,0,128,0.25)', 1000);
+    spawn2D(W/2, H/2, { count: 60, color: '#ff0080', speed: 4, gravity: 0.1 });
+  }
+}
+
+function restartGame() {
+  STATE.playerScore = 0;
+  STATE.computerScore = 0;
+  STATE.playing = false;
+  STATE.streak = 0;
+  STATE.round = 0;
+  STATE.history = [];
+  document.getElementById('streak-badge').style.display = 'none';
+  updateHUD();
+  hideResult();
+  morphHand('player-hand-svg', 'rock');
+  morphHand('computer-hand-svg', 'rock');
+  setChoiceLabels(null, null);
+  setStatus('Choose your weapon');
+  unlockButtons();
+  showScreen('game');
+}
+
+function goHome() {
+  STATE.playerScore = 0;
+  STATE.computerScore = 0;
+  STATE.playing = false;
+  STATE.streak = 0;
+  STATE.round = 0;
+  STATE.history = [];
+  document.getElementById('streak-badge').style.display = 'none';
+  updateHUD();
+  showScreen('landing');
+}
+
+/* ========================================
+   SCREEN MANAGEMENT
+   ======================================== */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function enterGame() {
+  flash('rgba(0,212,255,0.3)', 500);
+  spawn2D(W/2, H*0.6, { count: 40, color: '#00d4ff', speed: 5 });
+  if (window.__threeShake) window.__threeShake(0.3);
+
+  setTimeout(() => {
+    morphHand('player-hand-svg', 'rock');
+    morphHand('computer-hand-svg', 'rock');
+    setStatus('Choose your weapon');
+    updateHUD();
+    showScreen('game');
+  }, 300);
+}
+
+// click anywhere on landing to enter
+document.getElementById('landing').addEventListener('click', enterGame);
+
+/* ========================================
+   BUTTON RIPPLE
+   ======================================== */
+document.querySelectorAll('.choice-btn, .btn-primary, .btn-secondary, .press-to-begin').forEach(btn => {
+  btn.addEventListener('click', function(e) {
+    const rect = this.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
+    ripple.style.left = (e.clientX - rect.left) + 'px';
+    ripple.style.top = (e.clientY - rect.top) + 'px';
+    this.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 700);
+    // spawn particles at click
+    spawn2D(e.clientX, e.clientY, { count: 12, color: '#00d4ff', speed: 2, gravity: 0.05 });
+  });
+});
+
+/* ========================================
+   KEYBOARD
+   ======================================== */
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('game').classList.contains('active')) return;
+  if (e.key === '1') play('rock');
+  if (e.key === '2') play('paper');
+  if (e.key === '3') play('scissors');
+  if (e.key === 'r' || e.key === 'R') { if (!STATE.playing) play('rock'); }
+  if (e.key === 'p' || e.key === 'P') { if (!STATE.playing) play('paper'); }
+  if (e.key === 's' || e.key === 'S') { if (!STATE.playing) play('scissors'); }
+});
+
+/* ========================================
+   INIT
+   ======================================== */
+updateHUD();
+setStatus('Choose your weapon');
+// initial hand state
+morphHand('player-hand-svg', 'rock');
+morphHand('computer-hand-svg', 'rock');
+
+console.log('%cNEXUS — Rock Paper Scissors', 'color:#00d4ff;font-size:20px;font-weight:bold;');
+console.log('%cPress 1/2/3 or R/P/S for keyboard control', 'color:#b040ff');
+</script>
+</body>
+</html>
